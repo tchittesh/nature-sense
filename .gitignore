@@ -1,0 +1,7 @@
+__pycache__
+
+# Recording outputs
+results/
+*.h5
+*.mp4
+*.csv
