@@ -20,11 +20,9 @@ import acoular as ac
 import numpy as np
 import matplotlib.pyplot as plt
 
+from constants import CAMERA_INDEX
 from utils import SoundDeviceSamplesGeneratorFp64, get_uma16_index
 
-
-CAMERA_INDEX = 0
-"""Default camera index to use."""
 
 VIDEO_FPS = 45
 """Arbitrary FPS to record video at. In reality, the frame rate will differ from this value."""
@@ -285,21 +283,12 @@ def main():
 
     args = parser.parse_args()
 
-    # Handle Ctrl+C gracefully
-    recorder = None
+    # Handle Ctrl+C gracefully and start recording
+    recorder = SyncedRecorder(output_dir=args.output_dir)
     def signal_handler(sig, frame):
-        if recorder:
-            recorder.stop_event.set()
+        recorder.stop_event.set()
     signal.signal(signal.SIGINT, signal_handler)
-
-    # Record
-    try:
-        recorder = SyncedRecorder(output_dir=args.output_dir)
-        recorder.record()
-
-    except RuntimeError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+    recorder.record()
 
 
 if __name__ == '__main__':

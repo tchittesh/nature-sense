@@ -1,4 +1,4 @@
-# Nature Observer
+# Nature Sense
 
 Tools for recording and analyzing synchronized audio and video with acoustic beamforming.
 
@@ -19,8 +19,8 @@ This repository contains two command-line tools for acoustic camera work:
 ### 1. Create Conda Environment
 
 ```bash
-conda create -n nature_observer python=3.11
-conda activate nature_observer
+conda create -n nature_sense python=3.11
+conda activate nature_sense
 ```
 
 ### 2. Install Dependencies
