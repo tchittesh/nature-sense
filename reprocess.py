@@ -22,6 +22,7 @@ from constants import (
     BEAMFORMING_Z_M,
     MIC_GEOMETRY_PATH,
 )
+from session import SessionFiles
 
 
 def parse_sync_csv(sync_path):
@@ -192,27 +193,23 @@ def reprocess(session_dir, output_path=None, visualize=False):
     Returns:
         List of result dictionaries with keys: time_idx, x, y, level
     """
-    session_dir = Path(session_dir)
+    session = SessionFiles(session_dir)
 
     # Verify session directory structure
-    audio_path = session_dir / 'audio.h5'
-    video_path = session_dir / 'video.mp4'
-    sync_path = session_dir / 'sync.csv'
-
-    if not audio_path.exists():
-        raise FileNotFoundError(f"Audio file not found: {audio_path}")
-    if not sync_path.exists():
-        raise FileNotFoundError(f"Sync file not found: {sync_path}")
-    if visualize and not video_path.exists():
-        raise FileNotFoundError(f"Video file not found: {video_path}")
+    if not session.audio.exists():
+        raise FileNotFoundError(f"Audio file not found: {session.audio}")
+    if not session.sync.exists():
+        raise FileNotFoundError(f"Sync file not found: {session.sync}")
+    if visualize and not session.video.exists():
+        raise FileNotFoundError(f"Video file not found: {session.video}")
 
     # Parse sync data
-    metadata, frame_timestamps = parse_sync_csv(sync_path)
+    metadata, frame_timestamps = parse_sync_csv(session.sync)
     start_timestamp = float(metadata.get('start_timestamp', 0))
     sample_rate = float(metadata.get('measured_sample_rate', metadata.get('nominal_sample_rate', 48000)))
 
-    print(f"Session: {session_dir.name}")
-    print(f"Audio: {audio_path}")
+    print(f"Session: {session.name}")
+    print(f"Audio: {session.audio}")
     print(f"Frequency: {BEAMFORMING_FREQUENCY_HZ} Hz")
     print(f"Z distance: {BEAMFORMING_Z_M} m")
     print(f"Grid: x=[{BEAMFORMING_XMIN_M}, {BEAMFORMING_XMAX_M}], y=[{BEAMFORMING_YMIN_M}, {BEAMFORMING_YMAX_M}], increment={BEAMFORMING_INCREMENT_M}")
@@ -226,7 +223,7 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
     # Set up acoular pipeline
     mic_geometry = ac.MicGeom(file=MIC_GEOMETRY_PATH)
-    ts = ac.TimeSamples(file=str(audio_path))
+    ts = ac.TimeSamples(file=str(session.audio))
 
     print(f"Audio samples: {ts.num_samples}")
     print(f"Audio duration: {ts.num_samples / ts.sample_freq:.2f} s")
@@ -258,7 +255,7 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
     # Save heatmaps as numpy array
     if output_path is None:
-        output_path = session_dir / 'beamforming_results.npy'
+        output_path = session.beamforming_results
 
     heatmaps = np.stack(heatmaps)
     np.save(output_path, heatmaps)
@@ -268,15 +265,14 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
     # Generate visualization video if requested
     if visualize:
-        output_video_path = session_dir / 'visualization.mp4'
         _create_visualization_video(
-            video_path=video_path,
+            video_path=session.video,
             heatmaps=heatmaps,
             frame_timestamps=frame_timestamps,
             start_timestamp=start_timestamp,
             sample_rate=sample_rate,
             num_per_average=512,  # Must match the num_per_average used in TimeAverage above
-            output_path=output_video_path,
+            output_path=session.visualization,
         )
 
 

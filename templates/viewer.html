@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nature Sense Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #111;
+      --surface: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #ccc;
+      --muted: #555;
+      --accent: #3df5c0;
+      --accent-dim: rgba(61, 245, 192, 0.08);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
+      font-size: 12px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 12px;
+      background: #0d0d0d;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 12px; color: var(--accent); letter-spacing: .08em; white-space: nowrap; }
+    select, button {
+      background: #222;
+      color: var(--text);
+      border: 1px solid #363636;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font: inherit;
+    }
+    select:hover, button:hover { background: #2a2a2a; }
+    button.primary {
+      color: var(--accent);
+      border-color: #1e6b52;
+      background: #0d2f24;
+    }
+    button.primary:hover { background: #143d2f; }
+    button:disabled { opacity: .4; cursor: default; }
+    #status { margin-left: auto; color: var(--muted); font-size: 11px; }
+
+    /* ── Main layout ── */
+    #content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 8px;
+      min-height: 0;
+    }
+    #top-row {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── Video panel ── */
+    #video-wrap {
+      position: relative;
+      flex: 1;
+      background: #000;
+      border: 1px solid var(--border);
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    #video-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* ── Beamforming side panel ── */
+    #side-panel {
+      width: 260px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .panel-title {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+    #bf-canvas-wrap {
+      border: 1px solid var(--border);
+      background: #0a0a0a;
+    }
+    #bf-canvas { display: block; width: 100%; }
+    #bf-info { color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+    /* ── Spectrogram ── */
+    #spec-section { flex-shrink: 0; }
+    #spec-wrap {
+      position: relative;
+      border: 1px solid var(--border);
+      cursor: crosshair;
+      user-select: none;
+    }
+    #spec-canvas { display: block; width: 100%; height: 170px; }
+
+    /* ── Selection bar ── */
+    #sel-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 5px 2px 0;
+    }
+    .sel-label { color: var(--muted); }
+    .sel-val { color: var(--accent); }
+    #beamform-btn { margin-left: auto; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Nature Sense</h1>
+  <select id="session-select"><option value="">— select session —</option></select>
+  <button id="load-btn">Load</button>
+  <span id="status">No session loaded</span>
+</header>
+
+<div id="content">
+  <div id="top-row">
+
+    <div id="video-wrap">
+      <video id="video" controls preload="metadata"></video>
+      <canvas id="video-overlay"></canvas>
+    </div>
+
+    <div id="side-panel">
+      <div class="panel-title">Beamforming</div>
+      <div id="bf-canvas-wrap">
+        <canvas id="bf-canvas"></canvas>
+      </div>
+      <div id="bf-info">
+        Drag a rectangle on the spectrogram to<br>select a time–frequency region,<br>then click Beamform.
+      </div>
+    </div>
+
+  </div>
+
+  <div id="spec-section">
+    <div id="spec-wrap">
+      <canvas id="spec-canvas"></canvas>
+    </div>
+    <div id="sel-bar">
+      <span class="sel-label">t:</span>
+      <span><span class="sel-val" id="sel-t1">—</span> → <span class="sel-val" id="sel-t2">—</span> s</span>
+      <span class="sel-label">f:</span>
+      <span><span class="sel-val" id="sel-f1">—</span> → <span class="sel-val" id="sel-f2">—</span> Hz</span>
+      <button id="beamform-btn" class="primary" disabled>Beamform</button>
+      <button id="clear-btn">Clear</button>
+      <button id="reset-zoom-btn">Reset Zoom</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+
+let session = null;
+let info    = null;       // {duration_s, freq_max_hz, n_channels, sample_rate}
+let specImg = null;       // HTMLImageElement — full spectrogram PNG
+let view    = null;       // {t1,t2,f1,f2} — visible window in world coords
+let selWorld = null;      // {t1,t2,f1,f2} — current selection (world coords)
+let bfResult = null;      // {heatmap:number[][], rows, cols}
+
+let isDragging    = false;
+let dragStartWorld = null;  // {t,f} — world coords where drag began
+let rafId = null;
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+
+const video        = document.getElementById('video');
+const videoWrap    = document.getElementById('video-wrap');
+const videoOverlay = document.getElementById('video-overlay');
+const specCanvas   = document.getElementById('spec-canvas');
+const bfCanvas     = document.getElementById('bf-canvas');
+const bfInfo       = document.getElementById('bf-info');
+
+const specCtx    = specCanvas.getContext('2d');
+const bfCtx      = bfCanvas.getContext('2d');
+const overlayCtx = videoOverlay.getContext('2d');
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+(async () => {
+  const sessions = await fetchJSON('/api/sessions');
+  const sel = document.getElementById('session-select');
+  sessions.forEach(s => {
+    const o = document.createElement('option');
+    o.value = o.textContent = s;
+    sel.appendChild(o);
+  });
+})();
+
+document.getElementById('load-btn').addEventListener('click', () => {
+  const name = document.getElementById('session-select').value;
+  if (name) loadSession(name);
+});
+
+async function loadSession(name) {
+  setStatus('Loading…');
+  session = name;
+  selWorld = null; bfResult = null;
+  updateSelUI();
+  clearOverlay();
+  clearBfPanel();
+
+  info = await fetchJSON(`/api/session/${name}/info`);
+  view = { t1: 0, t2: info.duration_s, f1: 0, f2: info.freq_max_hz };
+  video.src = `/api/session/${name}/video`;
+
+  setStatus('Computing spectrogram (first load may take a moment)…');
+  specImg = await loadImage(`/api/session/${name}/spectrogram.png`);
+
+  setStatus(`${name}  ·  ${info.duration_s.toFixed(1)} s  ·  ${info.n_channels} ch  ·  ${info.sample_rate} Hz`);
+  startLoop();
+}
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+
+function startLoop() {
+  if (rafId) cancelAnimationFrame(rafId);
+  const loop = () => { drawSpec(); syncOverlay(); rafId = requestAnimationFrame(loop); };
+  rafId = requestAnimationFrame(loop);
+}
+
+// ── Spectrogram drawing ───────────────────────────────────────────────────────
+
+const AXIS_W = 44;  // px reserved for the frequency axis labels
+
+function drawSpec() {
+  const W = specCanvas.offsetWidth;
+  const H = specCanvas.offsetHeight;
+  if (specCanvas.width !== W) specCanvas.width = W;
+  if (specCanvas.height !== H) specCanvas.height = H;
+
+  specCtx.clearRect(0, 0, W, H);
+  if (!specImg || !info || !view) return;
+
+  const plotW = W - AXIS_W;
+
+  // ── Spectrogram image (zoomed to view) ──
+  // The PNG has time on x (left=0s, right=duration) and freq on y (top=freq_max, bottom=0).
+  const iw = specImg.naturalWidth, ih = specImg.naturalHeight;
+  const srcX = (view.t1 / info.duration_s) * iw;
+  const srcW = ((view.t2 - view.t1) / info.duration_s) * iw;
+  const srcY = ((info.freq_max_hz - view.f2) / info.freq_max_hz) * ih;
+  const srcH = ((view.f2 - view.f1) / info.freq_max_hz) * ih;
+  specCtx.drawImage(specImg, srcX, srcY, srcW, srcH, AXIS_W, 0, plotW, H);
+
+  // ── Frequency axis ──
+  specCtx.fillStyle = 'rgba(0,0,0,0.8)';
+  specCtx.fillRect(0, 0, AXIS_W, H);
+  specCtx.textAlign = 'right';
+  specCtx.font = '10px monospace';
+  const fStep = niceStep(view.f2 - view.f1, 5);
+  for (let f = Math.ceil(view.f1 / fStep) * fStep; f <= view.f2 + 1e-9; f += fStep) {
+    const y = (1 - (f - view.f1) / (view.f2 - view.f1)) * H;
+    specCtx.fillStyle = '#666';
+    specCtx.fillText(f < 1000 ? f.toFixed(0) : `${(f/1000).toFixed(f>=10000?0:1)}k`, 40, y + 3.5);
+    specCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+    specCtx.lineWidth = 1;
+    specCtx.beginPath(); specCtx.moveTo(AXIS_W, y); specCtx.lineTo(W, y); specCtx.stroke();
+  }
+
+  // ── Time axis ──
+  specCtx.textAlign = 'center';
+  specCtx.fillStyle = '#555';
+  const tSpan = view.t2 - view.t1;
+  const tStep = niceStep(tSpan, Math.floor(plotW / 70));
+  for (let t = Math.ceil(view.t1 / tStep) * tStep; t <= view.t2 + 1e-9; t += tStep) {
+    const x = AXIS_W + ((t - view.t1) / tSpan) * plotW;
+    specCtx.fillText(t.toFixed(tStep < 1 ? 1 : 0) + 's', x, H - 2);
+  }
+
+  // ── Playhead ──
+  if (video.readyState > 0) {
+    const tNorm = (video.currentTime - view.t1) / tSpan;
+    if (tNorm >= 0 && tNorm <= 1) {
+      const x = AXIS_W + tNorm * plotW;
+      specCtx.strokeStyle = 'rgba(255,255,255,0.85)';
+      specCtx.lineWidth = 1.5;
+      specCtx.beginPath(); specCtx.moveTo(x, 0); specCtx.lineTo(x, H); specCtx.stroke();
+    }
+  }
+
+  // ── Selection rectangle ──
+  if (selWorld) {
+    const r = worldToCanvas(selWorld.t1, selWorld.f2, selWorld.t2, selWorld.f1, W, H);
+    specCtx.strokeStyle = '#3df5c0';
+    specCtx.lineWidth = 1.5;
+    specCtx.setLineDash([5, 3]);
+    specCtx.strokeRect(r.x, r.y, r.w, r.h);
+    specCtx.setLineDash([]);
+    specCtx.fillStyle = 'rgba(61,245,192,0.07)';
+    specCtx.fillRect(r.x, r.y, r.w, r.h);
+  }
+}
+
+// Convert world (t,f) pair to canvas pixel, clamped to plot area.
+function tToX(t, W) {
+  return AXIS_W + ((t - view.t1) / (view.t2 - view.t1)) * (W - AXIS_W);
+}
+function fToY(f, H) {
+  return (1 - (f - view.f1) / (view.f2 - view.f1)) * H;
+}
+function worldToCanvas(t1, f2, t2, f1, W, H) {
+  // f2 > f1, and higher freq = lower y on canvas
+  const x  = Math.max(AXIS_W, tToX(t1, W));
+  const x2 = Math.min(W,      tToX(t2, W));
+  const y  = Math.max(0,  fToY(f2, H));
+  const y2 = Math.min(H,  fToY(f1, H));
+  return { x, y, w: x2 - x, h: y2 - y };
+}
+
+function niceStep(range, desiredTicks) {
+  const raw = range / Math.max(1, desiredTicks);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 5, 10, 20, 50, 100]) {
+    if (mag * m >= raw) return mag * m;
+  }
+  return mag * 100;
+}
+
+// ── Spectrogram interaction ───────────────────────────────────────────────────
+
+// Convert a mouse event to world (t, f) coordinates.
+function eventWorld(e) {
+  const rect = specCanvas.getBoundingClientRect();
+  const W = specCanvas.offsetWidth, H = specCanvas.offsetHeight;
+  const px = Math.max(0, Math.min(W - AXIS_W, e.clientX - rect.left - AXIS_W));
+  const py = Math.max(0, Math.min(H, e.clientY - rect.top));
+  return {
+    t: view.t1 + (px / (W - AXIS_W)) * (view.t2 - view.t1),
+    f: view.f1 + (1 - py / H) * (view.f2 - view.f1),
+  };
+}
+
+specCanvas.addEventListener('mousedown', e => {
+  if (!info || !view) return;
+  isDragging = true;
+  dragStartWorld = eventWorld(e);
+  selWorld = null;
+  updateSelUI();
+});
+
+specCanvas.addEventListener('mousemove', e => {
+  if (!isDragging || !info) return;
+  const cur = eventWorld(e);
+  selWorld = {
+    t1: Math.min(dragStartWorld.t, cur.t), t2: Math.max(dragStartWorld.t, cur.t),
+    f1: Math.min(dragStartWorld.f, cur.f), f2: Math.max(dragStartWorld.f, cur.f),
+  };
+});
+
+specCanvas.addEventListener('mouseup', e => {
+  if (!isDragging || !info) return;
+  isDragging = false;
+
+  // Short click → seek; don't set a selection.
+  if (!selWorld || selWorld.t2 - selWorld.t1 < 0.1 || selWorld.f2 - selWorld.f1 < 50) {
+    if (dragStartWorld) video.currentTime = dragStartWorld.t;
+    selWorld = null;
+    document.getElementById('beamform-btn').disabled = true;
+    updateSelUI();
+    return;
+  }
+
+  updateSelUI();
+  document.getElementById('beamform-btn').disabled = false;
+});
+
+specCanvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+// ── Zoom (scroll wheel) ───────────────────────────────────────────────────────
+// Scroll          → horizontal (time) zoom centred on mouse
+// Shift + Scroll  → vertical (frequency) zoom centred on mouse
+
+specCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!info || !view) return;
+
+  const factor = e.deltaY > 0 ? 1.3 : 1 / 1.3;
+  const { t, f } = eventWorld(e);
+
+  if (e.shiftKey) {
+    // Vertical zoom: keep mouse frequency fixed
+    const newSpan = Math.max(100, (view.f2 - view.f1) * factor);
+    const nx = (f - view.f1) / (view.f2 - view.f1);  // fraction from bottom
+    let f1 = f - nx * newSpan;
+    let f2 = f1 + newSpan;
+    if (f1 < 0)                    { f2 -= f1; f1 = 0; }
+    if (f2 > info.freq_max_hz)     { f1 -= f2 - info.freq_max_hz; f2 = info.freq_max_hz; }
+    view.f1 = Math.max(0, f1);
+    view.f2 = Math.min(info.freq_max_hz, f2);
+  } else {
+    // Horizontal zoom: keep mouse time fixed
+    const newSpan = Math.max(0.5, (view.t2 - view.t1) * factor);
+    const nx = (t - view.t1) / (view.t2 - view.t1);  // fraction from left
+    let t1 = t - nx * newSpan;
+    let t2 = t1 + newSpan;
+    if (t1 < 0)                  { t2 -= t1; t1 = 0; }
+    if (t2 > info.duration_s)    { t1 -= t2 - info.duration_s; t2 = info.duration_s; }
+    view.t1 = Math.max(0, t1);
+    view.t2 = Math.min(info.duration_s, t2);
+  }
+}, { passive: false });
+
+document.getElementById('reset-zoom-btn').addEventListener('click', () => {
+  if (!info) return;
+  view = { t1: 0, t2: info.duration_s, f1: 0, f2: info.freq_max_hz };
+});
+
+// ── Selection UI ──────────────────────────────────────────────────────────────
+
+function updateSelUI() {
+  const fmt  = v => v == null ? '—' : v.toFixed(2);
+  const fmtf = v => v == null ? '—' : Math.round(v).toString();
+  document.getElementById('sel-t1').textContent = selWorld ? fmt(selWorld.t1)  : '—';
+  document.getElementById('sel-t2').textContent = selWorld ? fmt(selWorld.t2)  : '—';
+  document.getElementById('sel-f1').textContent = selWorld ? fmtf(selWorld.f1) : '—';
+  document.getElementById('sel-f2').textContent = selWorld ? fmtf(selWorld.f2) : '—';
+}
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  selWorld = null; bfResult = null;
+  document.getElementById('beamform-btn').disabled = true;
+  updateSelUI();
+  clearOverlay();
+  clearBfPanel();
+});
+
+// ── Beamforming ───────────────────────────────────────────────────────────────
+
+document.getElementById('beamform-btn').addEventListener('click', async () => {
+  if (!selWorld || !session) return;
+  const btn = document.getElementById('beamform-btn');
+  btn.disabled = true;
+  btn.textContent = 'Computing…';
+  setStatus(`Beamforming  t=${selWorld.t1.toFixed(1)}–${selWorld.t2.toFixed(1)}s  f=${Math.round(selWorld.f1)}–${Math.round(selWorld.f2)}Hz…`);
+
+  try {
+    const data = await fetchJSON(`/api/session/${session}/beamform`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selWorld),
+    });
+
+    if (data.error) { setStatus('Error: ' + data.error); return; }
+
+    bfResult = data;
+    drawBfPanel();
+    drawVideoOverlay();
+    setStatus(`Beamformed  t=${selWorld.t1.toFixed(1)}–${selWorld.t2.toFixed(1)}s  f=${Math.round(selWorld.f1)}–${Math.round(selWorld.f2)}Hz`);
+  } catch (err) {
+    setStatus('Beamforming failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Beamform';
+  }
+});
+
+// ── Beamforming panel ─────────────────────────────────────────────────────────
+
+function bfMaxPoint(heatmap, rows, cols) {
+  let maxVal = -Infinity, maxR = 0, maxC = 0;
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++)
+      if (heatmap[r][c] > maxVal) { maxVal = heatmap[r][c]; maxR = r; maxC = c; }
+  return { maxVal, maxR, maxC };
+}
+
+function drawCrosshair(ctx, cx, cy, radius, armLen, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - armLen, cy); ctx.lineTo(cx + armLen, cy);
+  ctx.moveTo(cx, cy - armLen); ctx.lineTo(cx, cy + armLen);
+  ctx.stroke();
+}
+
+function drawBfPanel() {
+  if (!bfResult) return;
+  const { heatmap, rows, cols } = bfResult;
+
+  const W = bfCanvas.offsetWidth || 260;
+  const H = Math.round(W * rows / cols);
+  bfCanvas.width = cols;
+  bfCanvas.height = rows;
+  bfCanvas.style.height = H + 'px';
+
+  const flat = heatmap.flat();
+  const lo = Math.min(...flat), hi = Math.max(...flat);
+  const range = hi - lo || 1;
+
+  const img = bfCtx.createImageData(cols, rows);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = (heatmap[r][c] - lo) / range;
+      const [R, G, B] = infernoRgb(v);
+      const i = (r * cols + c) * 4;
+      img.data[i] = R; img.data[i+1] = G; img.data[i+2] = B; img.data[i+3] = 255;
+    }
+  }
+  bfCtx.putImageData(img, 0, 0);
+
+  const { maxVal, maxR, maxC } = bfMaxPoint(heatmap, rows, cols);
+  drawCrosshair(bfCtx, maxC + 0.5, maxR + 0.5, 3, 6, '#3df5c0');
+
+  bfInfo.innerHTML =
+    `Max: <span style="color:var(--accent)">${maxVal.toFixed(1)} dB</span><br>` +
+    `Grid pos: (${maxC}, ${maxR}) of (${cols}, ${rows})`;
+}
+
+function clearBfPanel() {
+  bfCtx.clearRect(0, 0, bfCanvas.width, bfCanvas.height);
+  bfInfo.innerHTML = 'Drag a rectangle on the spectrogram to<br>select a time–frequency region,<br>then click Beamform.';
+}
+
+// ── Video overlay ─────────────────────────────────────────────────────────────
+
+function syncOverlay() {
+  const W = videoWrap.offsetWidth, H = videoWrap.offsetHeight;
+  if (videoOverlay.width !== W || videoOverlay.height !== H) {
+    videoOverlay.width = W;
+    videoOverlay.height = H;
+    if (bfResult) drawVideoOverlay();
+  }
+}
+
+function videoContentRect() {
+  const W = videoOverlay.width, H = videoOverlay.height;
+  const vr = video.videoWidth / video.videoHeight;
+  const cr = W / H;
+  if (!vr) return { x: 0, y: 0, w: W, h: H };
+  if (vr > cr) { const h = W / vr; return { x: 0, y: (H - h) / 2, w: W, h }; }
+  const w = H * vr; return { x: (W - w) / 2, y: 0, w, h: H };
+}
+
+function drawVideoOverlay() {
+  if (!bfResult) return;
+  const { heatmap, rows, cols } = bfResult;
+
+  const flat = heatmap.flat();
+  const lo = Math.min(...flat), hi = Math.max(...flat);
+  const range = hi - lo || 1;
+
+  // Build heatmap at native grid resolution.
+  const tmp = document.createElement('canvas');
+  tmp.width = cols; tmp.height = rows;
+  const ctx = tmp.getContext('2d');
+  const img = ctx.createImageData(cols, rows);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = (heatmap[r][c] - lo) / range;
+      const [R, G, B] = jetRgb(v);
+      const i = (r * cols + c) * 4;
+      img.data[i] = R; img.data[i+1] = G; img.data[i+2] = B;
+      img.data[i+3] = Math.round(v * v * 180);  // alpha ∝ intensity²
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const { x, y, w, h } = videoContentRect();
+  overlayCtx.clearRect(0, 0, videoOverlay.width, videoOverlay.height);
+  overlayCtx.drawImage(tmp, x, y, w, h);
+
+  // Crosshair at max point, scaled to video content rect.
+  const { maxR, maxC } = bfMaxPoint(heatmap, rows, cols);
+  const cx = x + (maxC / cols) * w;
+  const cy = y + (maxR / rows) * h;
+  drawCrosshair(overlayCtx, cx, cy, 10, 18, '#3df5c0');
+}
+
+function clearOverlay() {
+  overlayCtx.clearRect(0, 0, videoOverlay.width, videoOverlay.height);
+}
+
+// ── Colormaps ─────────────────────────────────────────────────────────────────
+
+const INFERNO = [
+  [0,0,4],[40,11,84],[101,21,110],[159,42,99],
+  [212,72,66],[245,125,21],[250,193,39],[252,255,164],
+];
+
+function infernoRgb(t) {
+  t = Math.max(0, Math.min(1, t));
+  const n = INFERNO.length - 1, pos = t * n;
+  const i = Math.min(Math.floor(pos), n - 1), f = pos - i;
+  const a = INFERNO[i], b = INFERNO[i + 1];
+  return [
+    Math.round(a[0] + f * (b[0] - a[0])),
+    Math.round(a[1] + f * (b[1] - a[1])),
+    Math.round(a[2] + f * (b[2] - a[2])),
+  ];
+}
+
+function jetRgb(t) {
+  t = Math.max(0, Math.min(1, t));
+  const R = Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 3)));
+  const G = Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 2)));
+  const B = Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 1)));
+  return [Math.round(R * 255), Math.round(G * 255), Math.round(B * 255)];
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function loadImage(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('Failed to load image'));
+    img.src = url;
+  });
+}
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+</script>
+</body>
+</html>

@@ -21,6 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from constants import CAMERA_INDEX
+from session import SessionFiles
 from utils import SoundDeviceSamplesGeneratorFp64, get_uma16_index
 
 
@@ -41,13 +42,9 @@ class SyncedRecorder:
     def __init__(self, output_dir):
         # Timestamp for this recording session
         self.session_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        self.session_dir = Path(output_dir) / self.session_time
-        self.session_dir.mkdir(parents=True, exist_ok=True)
-
-        # Output paths
-        self.audio_path = self.session_dir / 'audio.h5'
-        self.video_path = self.session_dir / 'video.mp4'
-        self.sync_path = self.session_dir / 'sync.csv'
+        session_dir = Path(output_dir) / self.session_time
+        session_dir.mkdir(parents=True, exist_ok=True)
+        self.session = SessionFiles(session_dir)
 
         # Device indices
         self.device_index = get_uma16_index()
@@ -79,7 +76,7 @@ class SyncedRecorder:
         # HDF5 writer
         self.h5_writer = ac.WriteH5(
             source=self.source_mixer,
-            file=str(self.audio_path)
+            file=str(self.session.audio)
         )
 
     def _setup_video(self):
@@ -97,7 +94,7 @@ class SyncedRecorder:
         # Video writer
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self.video_writer = cv2.VideoWriter(
-            str(self.video_path),
+            str(self.session.video),
             fourcc,
             VIDEO_FPS,
             (actual_width, actual_height)
@@ -188,7 +185,7 @@ class SyncedRecorder:
             measured_sample_rate = self.sample_rate
             drift_ppm = 0
 
-        with open(self.sync_path, 'w', newline='') as f:
+        with open(self.session.sync, 'w', newline='') as f:
             writer = csv.writer(f)
 
             # Header with metadata
@@ -219,7 +216,7 @@ class SyncedRecorder:
         Blocks until the preview window is closed or Ctrl+C is pressed.
         Creates three output files: audio.h5, video.mp4, and sync.csv.
         """
-        print(f"\nOutput directory: {self.session_dir}\n")
+        print(f"\nOutput directory: {self.session.session_dir}\n")
 
         # Setup
         print("Initializing audio...")
@@ -265,9 +262,9 @@ class SyncedRecorder:
         if abs(self.drift_ppm) > 100:
             print(f"  ⚠️  High drift detected - consider using measured_sample_rate for sync")
         print(f"\nFiles saved:")
-        print(f"  {self.audio_path}")
-        print(f"  {self.video_path}")
-        print(f"  {self.sync_path}")
+        print(f"  {self.session.audio}")
+        print(f"  {self.session.video}")
+        print(f"  {self.session.sync}")
 
 
 def main():
