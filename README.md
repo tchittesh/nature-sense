@@ -10,6 +10,8 @@ Tools for recording and analyzing synchronized audio and video with acoustic bea
 | `stitch.py` | Re-encodes a session's video to 30 fps (using `sync.csv` timestamps) and muxes it with mixed-down mono audio into `output.mp4`. |
 | `reprocess.py` | Runs acoustic beamforming on a recorded session and overlays a sound-source heatmap on the video, producing `visualization.mp4`. |
 | `calibrate.py` | Captures checkerboard images and computes camera intrinsic matrix and distortion coefficients, saving results to `calibration.yaml`. |
+| `calibrate_april_tag.py` | Interactive AprilTag-board calibration guided by an 18-stage pose grid; auto-saves frames and writes `calibration.yaml` + `calibration_detections.npz`. |
+| `calibration_metrics.py` | Loads `calibration_detections.npz`, computes per-frame reprojection residuals, and saves a PNG with spatial and per-stage error heatmaps. Optional `--overwrite-yaml` writes the stored calibration back to `calibration.yaml`. |
 | `viewer.py` | Frontend viewer for browsing session results including spectrograms and beamforming visualizations. |
 | `biodenoising_modal.py` | Modal serverless script that denoises animal vocalizations in a session audio file using the biodenoising model on a cloud GPU. |
 | `sam_audio_modal.py` | Modal serverless script that isolates a target sound (by text description) from a session recording using Meta's SAM-Audio model on a cloud GPU. |
