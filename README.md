@@ -2,12 +2,17 @@
 
 Tools for recording and analyzing synchronized audio and video with acoustic beamforming.
 
-## Overview
+## Scripts
 
-This repository contains two command-line tools for acoustic camera work:
-
-- **record.py**: Records synchronized audio from a UMA-16 microphone array and video from a webcam
-- **reprocess.py**: Reprocesses recorded sessions with acoustic beamforming to localize sound sources
+| Script | Description |
+|--------|-------------|
+| `record.py` | Captures synchronized 16-channel audio (UMA-16) and video, saving `audio.h5`, `video.mp4`, and `sync.csv` to a timestamped session directory. |
+| `stitch.py` | Re-encodes a session's video to 30 fps (using `sync.csv` timestamps) and muxes it with mixed-down mono audio into `output.mp4`. |
+| `reprocess.py` | Runs acoustic beamforming on a recorded session and overlays a sound-source heatmap on the video, producing `visualization.mp4`. |
+| `calibrate.py` | Captures checkerboard images and computes camera intrinsic matrix and distortion coefficients, saving results to `calibration.yaml`. |
+| `viewer.py` | Frontend viewer for browsing session results including spectrograms and beamforming visualizations. |
+| `biodenoising_modal.py` | Modal serverless script that denoises animal vocalizations in a session audio file using the biodenoising model on a cloud GPU. |
+| `sam_audio_modal.py` | Modal serverless script that isolates a target sound (by text description) from a session recording using Meta's SAM-Audio model on a cloud GPU. |
 
 ## Hardware Requirements
 
