@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 import numpy as np
 import yaml
@@ -13,6 +13,7 @@ from constants import CALIBRATION_YAML_PATH
 @dataclass
 class CameraMatrix:
     """Camera intrinsic matrix parameters."""
+
     fx: float
     fy: float
     cx: float
@@ -20,11 +21,7 @@ class CameraMatrix:
 
     def to_matrix(self) -> np.ndarray:
         """Convert to OpenCV camera matrix format."""
-        return np.array([
-            [self.fx, 0, self.cx],
-            [0, self.fy, self.cy],
-            [0, 0, 1]
-        ], dtype=np.float64)
+        return np.array([[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]], dtype=np.float64)
 
     @classmethod
     def from_matrix(cls, matrix: np.ndarray) -> CameraMatrix:
@@ -33,13 +30,14 @@ class CameraMatrix:
             fx=float(matrix[0, 0]),
             fy=float(matrix[1, 1]),
             cx=float(matrix[0, 2]),
-            cy=float(matrix[1, 2])
+            cy=float(matrix[1, 2]),
         )
 
 
 @dataclass
 class ImageSize:
     """Image dimensions in pixels."""
+
     width: int
     height: int
 
@@ -47,6 +45,7 @@ class ImageSize:
 @dataclass
 class DistortionCoefficients:
     """Lens distortion coefficients (Brown-Conrady model)."""
+
     k1: float
     k2: float
     p1: float
@@ -65,13 +64,14 @@ class DistortionCoefficients:
             k2=float(dist[0, 1]),
             p1=float(dist[0, 2]),
             p2=float(dist[0, 3]),
-            k3=float(dist[0, 4])
+            k3=float(dist[0, 4]),
         )
 
 
 @dataclass
 class CalibrationResult:
     """Complete camera calibration result."""
+
     camera_matrix: CameraMatrix
     distortion: DistortionCoefficients
     image_size: ImageSize
@@ -83,18 +83,18 @@ class CalibrationResult:
 
     def save(self) -> None:
         """Save calibration to YAML file at CALIBRATION_YAML_PATH."""
-        with open(CALIBRATION_YAML_PATH, 'w') as f:
+        with open(CALIBRATION_YAML_PATH, "w") as f:
             yaml.dump(asdict(self), f)
 
     @classmethod
     def load(cls) -> CalibrationResult:
         """Load camera calibration from YAML file at CALIBRATION_YAML_PATH."""
-        with open(CALIBRATION_YAML_PATH, 'r') as f:
+        with open(CALIBRATION_YAML_PATH) as f:
             data = yaml.safe_load(f)
 
         return cls(
-            camera_matrix=CameraMatrix(**data['camera_matrix']),
-            distortion=DistortionCoefficients(**data['distortion']),
-            image_size=ImageSize(**data['image_size']),
-            rms_error_pixels=data['rms_error_pixels']
+            camera_matrix=CameraMatrix(**data["camera_matrix"]),
+            distortion=DistortionCoefficients(**data["distortion"]),
+            image_size=ImageSize(**data["image_size"]),
+            rms_error_pixels=data["rms_error_pixels"],
         )

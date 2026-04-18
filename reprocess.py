@@ -13,12 +13,12 @@ import numpy as np
 from tqdm import tqdm
 
 from constants import (
-    BEAMFORMING_XMIN_M,
-    BEAMFORMING_XMAX_M,
-    BEAMFORMING_YMIN_M,
-    BEAMFORMING_YMAX_M,
-    BEAMFORMING_INCREMENT_M,
     BEAMFORMING_FREQUENCY_HZ,
+    BEAMFORMING_INCREMENT_M,
+    BEAMFORMING_XMAX_M,
+    BEAMFORMING_XMIN_M,
+    BEAMFORMING_YMAX_M,
+    BEAMFORMING_YMIN_M,
     BEAMFORMING_Z_M,
     MIC_GEOMETRY_PATH,
 )
@@ -37,17 +37,17 @@ def parse_sync_csv(sync_path):
     metadata = {}
     frame_timestamps = []
 
-    with open(sync_path, 'r') as f:
+    with open(sync_path) as f:
         reader = csv.reader(f)
         for row in reader:
             if not row:
                 continue
-            if row[0].startswith('# '):
+            if row[0].startswith("# "):
                 # Metadata row
                 key = row[0][2:]  # Remove '# ' prefix
                 if len(row) > 1:
                     metadata[key] = row[1]
-            elif row[0] == 'frame_idx':
+            elif row[0] == "frame_idx":
                 # Header row, skip
                 continue
             else:
@@ -87,7 +87,9 @@ def _create_visualization_video(
     # TimeAverage with num_per_average=N outputs 1 sample per N input audio samples
     # So each beamforming frame represents num_per_average/sample_rate seconds of audio
     time_per_bf_frame = num_per_average / sample_rate
-    print(f"  Beamforming frame rate: {1/time_per_bf_frame:.1f} Hz ({time_per_bf_frame*1000:.2f} ms per frame)")
+    print(
+        f"  Beamforming frame rate: {1/time_per_bf_frame:.1f} Hz ({time_per_bf_frame*1000:.2f} ms per frame)"
+    )
 
     # Open input video
     cap = cv2.VideoCapture(str(video_path))
@@ -102,7 +104,7 @@ def _create_visualization_video(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     # Create output video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(str(output_path), fourcc, fps, (frame_width, frame_height))
 
     # Build timestamp lookup from frame_timestamps
@@ -116,7 +118,9 @@ def _create_visualization_video(
     # Calculate expected duration coverage
     total_bf_duration = len(heatmaps) * time_per_bf_frame
     print(f"  Beamforming covers {total_bf_duration:.2f}s ({len(heatmaps)} frames)")
-    print(f"  Video has {total_frames} frames at {frame_width}x{frame_height}, {fps:.1f} fps ({total_frames/fps:.2f}s)")
+    print(
+        f"  Video has {total_frames} frames at {frame_width}x{frame_height}, {fps:.1f} fps ({total_frames/fps:.2f}s)"
+    )
 
     frame_idx = 0
     last_bf_idx = 0  # Track last used beamforming frame for interpolation
@@ -149,7 +153,9 @@ def _create_visualization_video(
             heatmap_color = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)
 
             # Resize heatmap to match video frame
-            heatmap_resized = cv2.resize(heatmap_color, (frame_width, frame_height), interpolation=cv2.INTER_NEAREST)
+            heatmap_resized = cv2.resize(
+                heatmap_color, (frame_width, frame_height), interpolation=cv2.INTER_NEAREST
+            )
 
             # Blend heatmap with video frame
             alpha = 0.4
@@ -205,20 +211,24 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
     # Parse sync data
     metadata, frame_timestamps = parse_sync_csv(session.sync)
-    start_timestamp = float(metadata.get('start_timestamp', 0))
-    sample_rate = float(metadata.get('measured_sample_rate', metadata.get('nominal_sample_rate', 48000)))
+    start_timestamp = float(metadata.get("start_timestamp", 0))
+    sample_rate = float(
+        metadata.get("measured_sample_rate", metadata.get("nominal_sample_rate", 48000))
+    )
 
     print(f"Session: {session.name}")
     print(f"Audio: {session.audio}")
     print(f"Frequency: {BEAMFORMING_FREQUENCY_HZ} Hz")
     print(f"Z distance: {BEAMFORMING_Z_M} m")
-    print(f"Grid: x=[{BEAMFORMING_XMIN_M}, {BEAMFORMING_XMAX_M}], y=[{BEAMFORMING_YMIN_M}, {BEAMFORMING_YMAX_M}], increment={BEAMFORMING_INCREMENT_M}")
+    print(
+        f"Grid: x=[{BEAMFORMING_XMIN_M}, {BEAMFORMING_XMAX_M}], y=[{BEAMFORMING_YMIN_M}, {BEAMFORMING_YMAX_M}], increment={BEAMFORMING_INCREMENT_M}"
+    )
     print(f"Sample rate: {sample_rate:.2f} Hz")
 
     # Calculate grid dimensions
     grid_dim = (
         int((BEAMFORMING_XMAX_M - BEAMFORMING_XMIN_M) / BEAMFORMING_INCREMENT_M + 1),
-        int((BEAMFORMING_YMAX_M - BEAMFORMING_YMIN_M) / BEAMFORMING_INCREMENT_M + 1)
+        int((BEAMFORMING_YMAX_M - BEAMFORMING_YMIN_M) / BEAMFORMING_INCREMENT_M + 1),
     )
 
     # Set up acoular pipeline
@@ -230,9 +240,12 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
     # Beamforming grid
     grid = ac.RectGrid(
-        x_min=BEAMFORMING_XMIN_M, x_max=BEAMFORMING_XMAX_M,
-        y_min=BEAMFORMING_YMIN_M, y_max=BEAMFORMING_YMAX_M,
-        z=BEAMFORMING_Z_M, increment=BEAMFORMING_INCREMENT_M
+        x_min=BEAMFORMING_XMIN_M,
+        x_max=BEAMFORMING_XMAX_M,
+        y_min=BEAMFORMING_YMIN_M,
+        y_max=BEAMFORMING_YMAX_M,
+        z=BEAMFORMING_Z_M,
+        increment=BEAMFORMING_INCREMENT_M,
     )
 
     # Steering vector
@@ -240,7 +253,7 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
     # Processing pipeline
     bf = ac.BeamformerTime(source=ts, steer=steer)
-    filt = ac.FiltOctave(source=bf, band=BEAMFORMING_FREQUENCY_HZ, fraction='Third octave')
+    filt = ac.FiltOctave(source=bf, band=BEAMFORMING_FREQUENCY_HZ, fraction="Third octave")
     power = ac.TimePower(source=filt)
     bf_out = ac.Average(source=power, num_per_average=512)
 
@@ -257,17 +270,17 @@ def reprocess(session_dir, output_path=None, visualize=False):
     if output_path is None:
         output_path = session.beamforming_results
 
-    heatmaps = np.stack(heatmaps)
-    np.save(output_path, heatmaps)
+    heatmaps_array = np.stack(heatmaps)
+    np.save(output_path, heatmaps_array)
 
     print(f"\nHeatmaps saved to: {output_path}")
-    print(f"Shape: {heatmaps.shape} (frames, height, width)")
+    print(f"Shape: {heatmaps_array.shape} (frames, height, width)")
 
     # Generate visualization video if requested
     if visualize:
         _create_visualization_video(
             video_path=session.video,
-            heatmaps=heatmaps,
+            heatmaps=heatmaps_array,
             frame_timestamps=frame_timestamps,
             start_timestamp=start_timestamp,
             sample_rate=sample_rate,
@@ -278,12 +291,16 @@ def reprocess(session_dir, output_path=None, visualize=False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Reprocess session data through the beamforming pipeline'
+        description="Reprocess session data through the beamforming pipeline"
     )
-    parser.add_argument('session_dir', help='Path to session directory')
-    parser.add_argument('--output', '-o', help='Output .npy file path')
-    parser.add_argument('--visualize', '-v', action='store_true',
-                        help='Generate visualization video with heatmap overlay')
+    parser.add_argument("session_dir", help="Path to session directory")
+    parser.add_argument("--output", "-o", help="Output .npy file path")
+    parser.add_argument(
+        "--visualize",
+        "-v",
+        action="store_true",
+        help="Generate visualization video with heatmap overlay",
+    )
 
     args = parser.parse_args()
 
@@ -302,5 +319,5 @@ def main():
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

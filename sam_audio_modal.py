@@ -21,9 +21,7 @@ sam_audio_image = (
         "huggingface_hub",
         "transformers",
     )
-    .pip_install(
-        "git+https://github.com/facebookresearch/sam-audio.git"
-    )
+    .pip_install("git+https://github.com/facebookresearch/sam-audio.git")
 )
 
 # ---------------------------------------------------------------------------
@@ -41,6 +39,7 @@ HF_CACHE_DIR = "/root/.cache/huggingface"
 # ---------------------------------------------------------------------------
 # GPU inference function
 # ---------------------------------------------------------------------------
+
 
 @app.function(
     image=sam_audio_image,
@@ -102,6 +101,7 @@ def separate_audio(
 # Local entrypoint
 # ---------------------------------------------------------------------------
 
+
 @app.local_entrypoint()
 def main(
     input_path: str,
@@ -141,6 +141,6 @@ def main(
     target_path.write_bytes(target_bytes)
     residual_path.write_bytes(residual_bytes)
 
-    print(f"Saved:")
+    print("Saved:")
     print(f"  target:   {target_path}")
     print(f"  residual: {residual_path}")

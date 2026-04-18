@@ -80,9 +80,7 @@ def _reencode_at_target_fps(
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(
-        str(output_video_path), fourcc, TARGET_FPS, (frame_width, frame_height)
-    )
+    out = cv2.VideoWriter(str(output_video_path), fourcc, TARGET_FPS, (frame_width, frame_height))
 
     # Precompute which input frame index each output frame should use.
     # bisect gives us O(log n) nearest-neighbour lookups.
@@ -171,9 +169,9 @@ def stitch_session(session_dir: Path) -> None:
 
     try:
         # Re-encode video at TARGET_FPS with correct frame timing.
-        print(f"  Re-encoding video...")
+        print("  Re-encoding video...")
         if not _reencode_at_target_fps(session.video, elapsed_times, tmp_video_path):
-            print(f"  ERROR: video re-encoding failed")
+            print("  ERROR: video re-encoding failed")
             return
 
         # Load audio and mix 16 channels to mono.
@@ -191,12 +189,22 @@ def stitch_session(session_dir: Path) -> None:
         # browser compatibility.
         result = subprocess.run(
             [
-                "ffmpeg", "-y",
-                "-i", str(tmp_video_path),
-                "-i", str(tmp_wav_path),
-                "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-                "-c:a", "aac",
-                "-movflags", "+faststart",
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(tmp_video_path),
+                "-i",
+                str(tmp_wav_path),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "22",
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
                 "-shortest",
                 str(session.output),
             ],

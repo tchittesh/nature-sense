@@ -27,6 +27,7 @@ MODEL = "biodenoising16k_dns48"
 # GPU inference function
 # ---------------------------------------------------------------------------
 
+
 @app.function(
     image=biodenoising_image,
     gpu="L4",
@@ -52,10 +53,14 @@ def denoise_audio(audio_bytes: bytes, filename: str = "input.mp4") -> bytes:
         wav_path = tmp_path / "input.wav"
         subprocess.run(
             [
-                "ffmpeg", "-y",
-                "-i", str(input_path),
-                "-ac", "1",          # mono
-                "-ar", "16000",      # resample to 16 kHz for model
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(input_path),
+                "-ac",
+                "1",  # mono
+                "-ar",
+                "16000",  # resample to 16 kHz for model
                 str(wav_path),
             ],
             check=True,
@@ -73,10 +78,14 @@ def denoise_audio(audio_bytes: bytes, filename: str = "input.mp4") -> bytes:
         subprocess.run(
             [
                 "biodenoise",
-                "--method", MODEL,
-                "--noisy_dir", str(noisy_dir),
-                "--out_dir", str(out_dir),
-                "--device", "cuda",
+                "--method",
+                MODEL,
+                "--noisy_dir",
+                str(noisy_dir),
+                "--out_dir",
+                str(out_dir),
+                "--device",
+                "cuda",
             ],
             check=True,
             capture_output=False,
@@ -93,6 +102,7 @@ def denoise_audio(audio_bytes: bytes, filename: str = "input.mp4") -> bytes:
 # ---------------------------------------------------------------------------
 # Local entrypoint
 # ---------------------------------------------------------------------------
+
 
 @app.local_entrypoint()
 def main(

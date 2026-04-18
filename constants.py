@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 import acoular as ac
 
 CAMERA_INDEX = 0
@@ -11,7 +12,7 @@ CAMERA_INDEX = 0
 MIC_GEOMETRY_PATH = Path(ac.__file__).parent / "xml" / "minidsp_uma-16_mirrored.xml"
 """Microphone geometry file path (absolute path within acoular package)."""
 
-BEAMFORMING_INCREMENT_M =  0.1
+BEAMFORMING_INCREMENT_M = 0.1
 """Beamforming grid spacing in meters."""
 
 BEAMFORMING_FREQUENCY_HZ = 4000.0

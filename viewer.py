@@ -57,6 +57,7 @@ RESULTS_DIR = Path("results")
 
 # ── Session list ──────────────────────────────────────────────────────────────
 
+
 @app.get("/api/sessions")
 def list_sessions():
     sessions = sorted(d.name for d in RESULTS_DIR.iterdir() if d.is_dir())
@@ -65,19 +66,23 @@ def list_sessions():
 
 # ── Session info ──────────────────────────────────────────────────────────────
 
+
 @app.get("/api/session/<name>/info")
 def session_info(name: str):
     session = SessionFiles(RESULTS_DIR / name)
     ts = ac.TimeSamples(file=str(session.audio))
-    return jsonify({
-        "duration_s": float(ts.num_samples / ts.sample_freq),
-        "sample_rate": float(ts.sample_freq),
-        "n_channels": int(ts.num_channels),
-        "freq_max_hz": SPECTROGRAM_FREQ_MAX_HZ,
-    })
+    return jsonify(
+        {
+            "duration_s": float(ts.num_samples / ts.sample_freq),
+            "sample_rate": float(ts.sample_freq),
+            "n_channels": int(ts.num_channels),
+            "freq_max_hz": SPECTROGRAM_FREQ_MAX_HZ,
+        }
+    )
 
 
 # ── Video ─────────────────────────────────────────────────────────────────────
+
 
 @app.get("/api/session/<name>/video")
 def serve_video(name: str):
@@ -94,6 +99,7 @@ def serve_video(name: str):
 
 
 # ── Spectrogram ───────────────────────────────────────────────────────────────
+
 
 @lru_cache(maxsize=4)
 def _spectrogram_cached(name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
@@ -146,6 +152,7 @@ def get_spectrogram(name: str):
 
 # ── Beamforming ───────────────────────────────────────────────────────────────
 
+
 def _beamform_segment(
     audio_segment: np.ndarray,
     sample_rate: float,
@@ -179,9 +186,7 @@ def _beamform_segment(
         remainder = n_samples % NUM_PER_AVG
         if remainder != 0:
             pad_len = NUM_PER_AVG - remainder
-            audio_segment = np.pad(
-                audio_segment, ((0, pad_len), (0, 0)), mode="constant"
-            )
+            audio_segment = np.pad(audio_segment, ((0, pad_len), (0, 0)), mode="constant")
 
         with h5py.File(tmp_path, "w") as hf:
             ds = hf.create_dataset("time_data", data=audio_segment.astype(np.float32))
@@ -190,9 +195,12 @@ def _beamform_segment(
         ts = ac.TimeSamples(file=tmp_path)
         mic_geom = ac.MicGeom(file=str(MIC_GEOMETRY_PATH))
         grid = ac.RectGrid(
-            x_min=BEAMFORMING_XMIN_M, x_max=BEAMFORMING_XMAX_M,
-            y_min=BEAMFORMING_YMIN_M, y_max=BEAMFORMING_YMAX_M,
-            z=BEAMFORMING_Z_M, increment=BEAMFORMING_INCREMENT_M,
+            x_min=BEAMFORMING_XMIN_M,
+            x_max=BEAMFORMING_XMAX_M,
+            y_min=BEAMFORMING_YMIN_M,
+            y_max=BEAMFORMING_YMAX_M,
+            z=BEAMFORMING_Z_M,
+            increment=BEAMFORMING_INCREMENT_M,
         )
         steer = ac.SteeringVector(env=ac.Environment(c=343), grid=grid, mics=mic_geom)
 
@@ -204,8 +212,8 @@ def _beamform_segment(
         heatmaps: list[np.ndarray] = []
         for res in avg.result(num=1):
             h = ac.L_p(res).reshape(GRID_DIM)  # (x_cols, y_rows)
-            h = np.transpose(h)                  # (y_rows, x_cols)
-            h = h[::-1, ::-1]                    # flip to video top-left origin
+            h = np.transpose(h)  # (y_rows, x_cols)
+            h = h[::-1, ::-1]  # flip to video top-left origin
             heatmaps.append(h)
 
         if not heatmaps:
@@ -221,6 +229,7 @@ def _beamform_segment(
 @app.post("/api/session/<name>/beamform")
 def beamform(name: str):
     import traceback
+
     body = request.get_json()
     t1: float = float(body["t1"])
     t2: float = float(body["t2"])
@@ -252,14 +261,17 @@ def beamform(name: str):
 
     grid_rows, grid_cols = heatmap.shape
 
-    return jsonify({
-        "heatmap": heatmap.tolist(),
-        "rows": grid_rows,
-        "cols": grid_cols,
-    })
+    return jsonify(
+        {
+            "heatmap": heatmap.tolist(),
+            "rows": grid_rows,
+            "cols": grid_cols,
+        }
+    )
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
+
 
 @app.get("/")
 def index():

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import argparse
+
 import cv2
 import numpy as np
 
 from calibration_types import (
+    CalibrationResult,
     CameraMatrix,
     DistortionCoefficients,
     ImageSize,
-    CalibrationResult,
 )
 from constants import CALIBRATION_YAML_PATH, CAMERA_INDEX
 
@@ -16,7 +17,10 @@ CHECKERBOARD_SIZE = (9, 6)  # Internal corners (cols, rows)
 SQUARE_SIZE_MM = 20.0
 MIN_IMAGES = 15
 
-def create_coverage_visualization(img_points: list[np.ndarray], image_shape: tuple[int, int]) -> np.ndarray:
+
+def create_coverage_visualization(
+    img_points: list[np.ndarray], image_shape: tuple[int, int]
+) -> np.ndarray:
     """Create a visualization showing coverage of calibration points across the image.
 
     Args:
@@ -33,12 +37,24 @@ def create_coverage_visualization(img_points: list[np.ndarray], image_shape: tup
 
     if len(img_points) == 0:
         # No points yet - show instructions
-        cv2.putText(coverage, "No calibration images yet",
-                    (width//4, height//2), cv2.FONT_HERSHEY_SIMPLEX,
-                    1.0, (100, 100, 100), 2)
-        cv2.putText(coverage, "Capture images with 's' key",
-                    (width//4, height//2 + 40), cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7, (100, 100, 100), 2)
+        cv2.putText(
+            coverage,
+            "No calibration images yet",
+            (width // 4, height // 2),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            (100, 100, 100),
+            2,
+        )
+        cv2.putText(
+            coverage,
+            "Capture images with 's' key",
+            (width // 4, height // 2 + 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (100, 100, 100),
+            2,
+        )
         return coverage
 
     # Create a heatmap by accumulating all points
@@ -71,6 +87,7 @@ def create_coverage_visualization(img_points: list[np.ndarray], image_shape: tup
 
     return coverage
 
+
 def create_checkerboard_pattern(dpi: float) -> tuple[np.ndarray, int, float]:
     """Create a checkerboard pattern image at correct physical size.
 
@@ -85,7 +102,9 @@ def create_checkerboard_pattern(dpi: float) -> tuple[np.ndarray, int, float]:
     # Calculate actual square size after quantization
     actual_square_size_mm = square_size_pixels * 25.4 / dpi
 
-    print(f"Square size: {SQUARE_SIZE_MM}mm (nominal) -> {square_size_pixels}px -> {actual_square_size_mm:.4f}mm (actual) at {dpi} DPI")
+    print(
+        f"Square size: {SQUARE_SIZE_MM}mm (nominal) -> {square_size_pixels}px -> {actual_square_size_mm:.4f}mm (actual) at {dpi} DPI"
+    )
 
     # Number of squares (add 1 to internal corners for outer squares)
     num_squares_x = CHECKERBOARD_SIZE[0] + 1
@@ -111,15 +130,19 @@ def create_checkerboard_pattern(dpi: float) -> tuple[np.ndarray, int, float]:
     checkerboard_bgr = cv2.cvtColor(checkerboard, cv2.COLOR_GRAY2BGR)
 
     # Add white border around the pattern
-    border_size = int(square_size_pixels/2)  # Border width equal to one square
+    border_size = int(square_size_pixels / 2)  # Border width equal to one square
     checkerboard_with_border = cv2.copyMakeBorder(
         checkerboard_bgr,
-        border_size, border_size, border_size, border_size,
+        border_size,
+        border_size,
+        border_size,
+        border_size,
         cv2.BORDER_CONSTANT,
-        value=(255, 255, 255)  # White border
+        value=(255, 255, 255),  # White border
     )
 
     return checkerboard_with_border, square_size_pixels, actual_square_size_mm
+
 
 def display_calibration_pattern(dpi: float) -> float:
     """Display the calibration pattern in a separate window.
@@ -146,13 +169,14 @@ def display_calibration_pattern(dpi: float) -> float:
 
     return actual_square_size_mm
 
+
 def main() -> None:
     """Interactive camera calibration."""
     parser = argparse.ArgumentParser(description="Interactive camera calibration tool")
     parser.add_argument(
         "--dpi",
         type=float,
-        help="Screen DPI for on-screen pattern display. If provided, displays calibration checkerboard."
+        help="Screen DPI for on-screen pattern display. If provided, displays calibration checkerboard.",
     )
     args = parser.parse_args()
 
@@ -168,7 +192,7 @@ def main() -> None:
 
     # Prepare object points (0,0,0), (1,0,0), (2,0,0)...
     objp = np.zeros((CHECKERBOARD_SIZE[0] * CHECKERBOARD_SIZE[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0:CHECKERBOARD_SIZE[0], 0:CHECKERBOARD_SIZE[1]].T.reshape(-1, 2)
+    objp[:, :2] = np.mgrid[0 : CHECKERBOARD_SIZE[0], 0 : CHECKERBOARD_SIZE[1]].T.reshape(-1, 2)
     objp *= actual_square_size_mm
 
     cap = cv2.VideoCapture(CAMERA_INDEX)
@@ -198,8 +222,13 @@ def main() -> None:
 
         if found:
             # Refine corners
-            corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1),
-                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
+            corners = cv2.cornerSubPix(
+                gray,
+                corners,
+                (11, 11),
+                (-1, -1),
+                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
+            )
             cv2.drawChessboardCorners(frame, CHECKERBOARD_SIZE, corners, found)
             status = "Corners detected - press 's' to save"
         else:
@@ -212,13 +241,26 @@ def main() -> None:
             status = "Undistorted view"
 
         # Draw status
-        cv2.putText(frame, f"Images: {len(img_points)}/{MIN_IMAGES}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame, status, (10, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(
+            frame,
+            f"Images: {len(img_points)}/{MIN_IMAGES}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+        )
+        cv2.putText(frame, status, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         if calibration is not None:
-            cv2.putText(frame, f"RMS Error: {calibration.rms_error_pixels:.3f}px", (10, 90),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(
+                frame,
+                f"RMS Error: {calibration.rms_error_pixels:.3f}px",
+                (10, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2,
+            )
 
         cv2.imshow("Camera Calibration", frame)
 
@@ -229,28 +271,29 @@ def main() -> None:
         WAIT_TIME_MS = 1000
         key = cv2.waitKey(WAIT_TIME_MS) & 0xFF
 
-        if key == ord('s') and found:
+        if key == ord("s") and found:
             obj_points.append(objp)
             img_points.append(corners)
             print(f"Saved image {len(img_points)}")
 
-        elif key == ord('c') and len(img_points) >= MIN_IMAGES:
+        elif key == ord("c") and len(img_points) >= MIN_IMAGES:
             print("Computing calibration...")
             height, width = gray.shape
             rms, mtx, dist, _, _ = cv2.calibrateCamera(
-                obj_points, img_points, (width, height), None, None)
+                obj_points, img_points, (width, height), None, None
+            )
             calibration = CalibrationResult(
                 camera_matrix=CameraMatrix.from_matrix(mtx),
                 distortion=DistortionCoefficients.from_array(dist),
                 image_size=ImageSize(width=width, height=height),
-                rms_error_pixels=rms
+                rms_error_pixels=rms,
             )
             print(f"Calibration complete! RMS error: {rms:.3f} pixels")
 
-        elif key == ord('u') and calibration:
+        elif key == ord("u") and calibration:
             show_undistorted = not show_undistorted
 
-        elif key == ord('q'):
+        elif key == ord("q"):
             break
 
     cap.release()
@@ -260,5 +303,6 @@ def main() -> None:
         calibration.save()
         print(f"Saved calibration to {CALIBRATION_YAML_PATH}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

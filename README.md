@@ -36,3 +36,17 @@ First install binary dependencies via conda, then pip install the rest:
 conda install -c conda-forge numba
 pip install -r requirements.txt
 ```
+
+### 3. Install Pre-Commit Hooks
+
+This project uses [`prek`](https://github.com/j178/prek) (a fast pre-commit replacement) to run linting (`ruff`), formatting (`ruff-format`), and type checking (`mypy`) on every commit. Install the git hooks once after cloning:
+
+```bash
+prek install
+```
+
+To run all hooks across the repo manually:
+
+```bash
+prek run --all-files
+```

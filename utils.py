@@ -1,6 +1,6 @@
+import acoular as ac
 import numpy as np
 import sounddevice as sd
-import acoular as ac
 
 
 def get_uma16_index() -> int:
@@ -10,7 +10,7 @@ def get_uma16_index() -> int:
 
     Returns:
         Index of the UMA-16 microphone array.
-    
+
     Raises RuntimeError if no matching device is found.
     """
     devices = sd.query_devices()
@@ -25,9 +25,9 @@ def get_uma16_index() -> int:
 
     # If not found by name, look for devices with exactly 16 input channels
     for index, device in enumerate(devices):
-        if device.get('max_input_channels', 0) == 16:
+        if device.get("max_input_channels", 0) == 16:
             return index
-    
+
     raise RuntimeError("Could not find the UMA-16 device.")
 
 
@@ -44,7 +44,7 @@ class SoundDeviceSamplesGeneratorFp64(ac.SoundDeviceSamplesGenerator):
             device=self.device,
             channels=self.numchannels,
             clip_off=True,
-            samplerate=self.sample_freq
+            samplerate=self.sample_freq,
         )
         with stream_obj as stream:
             self.running = True

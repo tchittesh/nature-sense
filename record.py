@@ -8,22 +8,21 @@ Records:
 """
 
 import argparse
-import sys
-import time
-import datetime
 import csv
+import datetime
 import signal
+import time
 from pathlib import Path
-from threading import Thread, Event
-import cv2
+from threading import Event, Thread
+
 import acoular as ac
-import numpy as np
+import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 
 from constants import CAMERA_INDEX
 from session import SessionFiles
 from utils import SoundDeviceSamplesGeneratorFp64, get_uma16_index
-
 
 VIDEO_FPS = 45
 """Arbitrary FPS to record video at. In reality, the frame rate will differ from this value."""
@@ -41,7 +40,7 @@ class SyncedRecorder:
 
     def __init__(self, output_dir):
         # Timestamp for this recording session
-        self.session_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.session_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         session_dir = Path(output_dir) / self.session_time
         session_dir.mkdir(parents=True, exist_ok=True)
         self.session = SessionFiles(session_dir)
@@ -51,7 +50,7 @@ class SyncedRecorder:
 
         # Recording state
         self.stop_event = Event()
-        self.start_timestamp = None
+        self.start_timestamp: float | None = None
         self.video_timestamps = []
         self.audio_blocks_written = 0
 
@@ -69,15 +68,11 @@ class SyncedRecorder:
 
         # Volt to Pascal conversion
         self.source_mixer = ac.SourceMixer(
-            sources=[self.audio_source],
-            weights=np.array([1/0.0016])
+            sources=[self.audio_source], weights=np.array([1 / 0.0016])
         )
 
         # HDF5 writer
-        self.h5_writer = ac.WriteH5(
-            source=self.source_mixer,
-            file=str(self.session.audio)
-        )
+        self.h5_writer = ac.WriteH5(source=self.source_mixer, file=str(self.session.audio))
 
     def _setup_video(self):
         """Set up OpenCV video capture and writer."""
@@ -92,12 +87,9 @@ class SyncedRecorder:
         actual_fps = int(self.video_capture.get(cv2.CAP_PROP_FPS))
 
         # Video writer
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         self.video_writer = cv2.VideoWriter(
-            str(self.session.video),
-            fourcc,
-            VIDEO_FPS,
-            (actual_width, actual_height)
+            str(self.session.video), fourcc, VIDEO_FPS, (actual_width, actual_height)
         )
 
         print(f"Video: {actual_width}x{actual_height} @ {actual_fps} fps")
@@ -121,7 +113,7 @@ class SyncedRecorder:
         plt.ion()
         fig, ax = plt.subplots(figsize=(10, 7))
         ax.set_title("Recording - Close window to stop")
-        ax.axis('off')
+        ax.axis("off")
         img_plot = None
 
         while not self.stop_event.is_set():
@@ -154,7 +146,7 @@ class SyncedRecorder:
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.7,
                     (255, 0, 0),
-                    2
+                    2,
                 )
 
                 # Update matplotlib display
@@ -175,6 +167,9 @@ class SyncedRecorder:
         """Save synchronization data to CSV."""
         end_timestamp = time.time()
         total_samples = self.audio_blocks_written * self.audio_block_size
+        if self.start_timestamp is None:
+            print("No start timestamp recorded; skipping sync data save.")
+            return
         actual_duration = end_timestamp - self.start_timestamp
 
         # Calculate actual sample rate (to detect clock drift)
@@ -185,23 +180,23 @@ class SyncedRecorder:
             measured_sample_rate = self.sample_rate
             drift_ppm = 0
 
-        with open(self.session.sync, 'w', newline='') as f:
+        with open(self.session.sync, "w", newline="") as f:
             writer = csv.writer(f)
 
             # Header with metadata
-            writer.writerow(['# Acoustic Camera Sync Data'])
-            writer.writerow(['# start_timestamp', self.start_timestamp])
-            writer.writerow(['# end_timestamp', end_timestamp])
-            writer.writerow(['# nominal_sample_rate', self.sample_rate])
-            writer.writerow(['# measured_sample_rate', f'{measured_sample_rate:.4f}'])
-            writer.writerow(['# drift_ppm', f'{drift_ppm:.2f}'])
-            writer.writerow(['# audio_block_size', self.audio_block_size])
-            writer.writerow(['# audio_blocks_written', self.audio_blocks_written])
-            writer.writerow(['# audio_total_samples', total_samples])
+            writer.writerow(["# Acoustic Camera Sync Data"])
+            writer.writerow(["# start_timestamp", self.start_timestamp])
+            writer.writerow(["# end_timestamp", end_timestamp])
+            writer.writerow(["# nominal_sample_rate", self.sample_rate])
+            writer.writerow(["# measured_sample_rate", f"{measured_sample_rate:.4f}"])
+            writer.writerow(["# drift_ppm", f"{drift_ppm:.2f}"])
+            writer.writerow(["# audio_block_size", self.audio_block_size])
+            writer.writerow(["# audio_blocks_written", self.audio_blocks_written])
+            writer.writerow(["# audio_total_samples", total_samples])
             writer.writerow([])
 
             # Video frame timestamps
-            writer.writerow(['frame_idx', 'timestamp'])
+            writer.writerow(["frame_idx", "timestamp"])
             for frame_idx, ts in self.video_timestamps:
                 writer.writerow([frame_idx, ts])
 
@@ -255,13 +250,17 @@ class SyncedRecorder:
         total_samples = self.audio_blocks_written * self.audio_block_size
         audio_duration = total_samples / self.sample_rate
 
-        print(f"\nRecording complete!")
-        print(f"  Audio: {audio_duration:.2f}s ({self.audio_blocks_written} blocks, {total_samples} samples)")
+        print("\nRecording complete!")
+        print(
+            f"  Audio: {audio_duration:.2f}s ({self.audio_blocks_written} blocks, {total_samples} samples)"
+        )
         print(f"  Video: {len(self.video_timestamps)} frames")
-        print(f"  Clock drift: {self.drift_ppm:+.1f} ppm (measured rate: {self.measured_sample_rate:.2f} Hz)")
+        print(
+            f"  Clock drift: {self.drift_ppm:+.1f} ppm (measured rate: {self.measured_sample_rate:.2f} Hz)"
+        )
         if abs(self.drift_ppm) > 100:
-            print(f"  ⚠️  High drift detected - consider using measured_sample_rate for sync")
-        print(f"\nFiles saved:")
+            print("  ⚠️  High drift detected - consider using measured_sample_rate for sync")
+        print("\nFiles saved:")
         print(f"  {self.session.audio}")
         print(f"  {self.session.video}")
         print(f"  {self.session.sync}")
@@ -269,24 +268,24 @@ class SyncedRecorder:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Record synchronized audio and video for acoustic camera. ' \
-        'Close the preview window or Ctrl+C to stop recording.'
+        description="Record synchronized audio and video for acoustic camera. "
+        "Close the preview window or Ctrl+C to stop recording."
     )
     parser.add_argument(
-        '--output-dir', '-o',
-        default='results',
-        help='Output directory (default: results)'
+        "--output-dir", "-o", default="results", help="Output directory (default: results)"
     )
 
     args = parser.parse_args()
 
     # Handle Ctrl+C gracefully and start recording
     recorder = SyncedRecorder(output_dir=args.output_dir)
+
     def signal_handler(sig, frame):
         recorder.stop_event.set()
+
     signal.signal(signal.SIGINT, signal_handler)
     recorder.record()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

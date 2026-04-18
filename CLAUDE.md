@@ -6,6 +6,8 @@
 
 Only commit when the user specifically asks you to commit changes.
 
+Before creating any commit, run `conda run -n nature_sense prek run --all-files` and fix anything it reports. Do not commit until all hooks pass.
+
 ## Python Environment
 
 This project uses a conda environment. Always activate it before running Python commands:
